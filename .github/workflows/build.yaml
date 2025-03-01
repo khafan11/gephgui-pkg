@@ -47,6 +47,7 @@ jobs:
         with:
           name: geph-macos
           path: macos/geph-macos.zip
+
   build_flatpak:
     runs-on: ubuntu-20.04
     steps:
@@ -123,3 +124,43 @@ jobs:
         with:
           name: geph-windows
           path: windows/Output/geph-windows-setup.exe
+
+  build_armv7:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: "recursive"
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+      - name: Set up Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup target add armv7-unknown-linux-gnueabihf
+      - name: Build GUI
+        run: |
+          cd gephgui-wry/gephgui
+          npm i -f
+          npm run build
+      - name: Build ARMv7 binary
+        run: |
+          cargo build --release --target=armv7-unknown-linux-gnueabihf
+      - name: Install rclone
+        run: |
+          sudo -v ; curl https://rclone.org/install.sh | sudo bash
+      - name: Configure rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "[b2]" > ~/.config/rclone/rclone.conf
+          echo "type = b2" >> ~/.config/rclone/rclone.conf
+          echo "account = ${{ secrets.B2_KEYID }}" >> ~/.config/rclone/rclone.conf
+          echo "key = ${{ secrets.B2_APPKEY }}" >> ~/.config/rclone/rclone.conf
+      - name: Upload to B2
+        run: rclone copyto target/armv7-unknown-linux-gnueabihf/release/geph-armv7 b2:geph-dl/STAGING/geph-armv7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geph-armv7
+          path: target/armv7-unknown-linux-gnueabihf/release/geph-armv7
